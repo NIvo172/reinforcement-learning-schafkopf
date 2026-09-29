@@ -1,0 +1,233 @@
+# AGENTS.md — How to Work on This Repo
+
+**Audience:** AI coding agents first; humans welcome — a task → command catalog for working on Schafkopf RL.
+**Source of truth:** if a command here disagrees with `pyproject.toml`, `tox.ini`, or the CI workflow, the repo files win.
+
+> This guide is feature-conditional: sections only appear for capabilities you enabled. See `.copier-answers.yml` at the project root for the active configuration.
+
+## 0. Project profile
+
+| Field | Value |
+|---|---|
+| Distribution name | `schafkopfrl` |
+| Package name | `schafkopfrl` |
+| Author | Ivo Nikolic <Ivo.Nikolic@outlook.com> |
+| Kind | data_science |
+| License | MIT |
+| Minimum / tested Python | `3.11` (tested: 3.11, 3.12, 3.13, 3.14) |
+| Backend | Hatchling + hatch-vcs |
+| Docstring style | google |
+
+---
+
+## 1. Always available (core)
+
+### 1.1 Dependencies and environment (`uv`)
+
+| Task | Command |
+|---|---|
+| Create / update virtualenv + lockfile | `uv sync` |
+| Add / remove a runtime dependency | `uv add <pkg>` / `uv remove <pkg>` |
+| Add to a named group | `uv add --group <name> <pkg>` |
+| Re-resolve without installing | `uv lock` |
+| Verify lockfile in sync | `uv lock --check` (also the `lock` Tox env) |
+| Run a command in the project env | `uv run <cmd>` |
+| One-shot, no project venv | `uvx <tool>` |
+
+Named groups (in `pyproject.toml [dependency-groups]`): test, lint, package-check, dev, notebooks, docs. `dev` aggregates the others plus `tox`, `tox-uv`, `pytest-sugar`.
+
+### 1.2 Versioning (Git tags)
+
+- Version is derived from the nearest `vX.Y.Z` Git tag in PEP 440 form — no hard-coded string (via the VCS backend).
+- `schafkopfrl.__version__` reads installed-metadata and falls back to `0+unknown` when not installed.
+
+### 1.3 Task runner (Tox) — one interface for every check
+
+| Env | Purpose |
+|---|---|
+| `lock` | `uv lock --check` |
+| `lint` | format-docstring · `git diff` · `ruff check` · `ruff format --check` · `mypy src tests scripts` |
+| `py<min>` (and each chosen version) | run the test suite |
+| `pre-commit` / `repo-checks` | all hygiene hooks / hygiene-only (`--hook-stage manual`) |
+| `notebooks` | format-docstring-jupyter · `scripts/check_notebooks.py` |
+| `dvc` | `dvc status` |
+| `docs` | `scripts/build_docs.py all` (UML + Sphinx html + coverage + clean) |
+| `uml` | `scripts/generate_uml.py` (Pyreverse → Mermaid) |
+| `package-check` | `scripts/check_package.py` (build + `twine check --strict` + `check-wheel-contents`) |
+| `build` | `uv build` |
+| `clean` | `scripts/clean.py` |
+
+Not every env is present — see the section that applies below. Run the **default** set with `uv run --locked tox`, or a slice by label: `tox run -m test` / `-m check` / `-m docs` / `-m package` / `-m notebooks` / `-m data` / `-m maintenance`.
+
+### 1.4 Tests (pytest)
+
+| Task | Command |
+|---|---|
+| Run suite | `uv run --locked pytest` (or `tox run -e py<min>`) |
+| Fast / parallel | `... pytest -m "not slow"` / `... pytest -n auto` |
+| Single test | `... pytest tests/test_module.py::test_name` |
+
+Gate: `--cov=schafkopfrl --cov-branch --cov-fail-under=80`. Reports: `reports/coverage/html/`, `reports/coverage/coverage.xml`, `reports/coverage/coverage.json`, `reports/pytest/report.html`, `reports/pytest/report.jsonl`, log `reports/pytest/logs/pytest.log`.
+
+### 1.5 Lint and typing
+
+| Task | Command |
+|---|---|
+| Ruff (lint / write / check) | `uv run --locked --group lint ruff check .` / `ruff format .` / `ruff format --check .` |
+| MyPy strict | `uv run --locked --group lint mypy src tests scripts` |
+| Normalise docstrings | `uv run --locked --group lint format-docstring src tests scripts` |
+
+| Normalise notebook docstrings | `uv run --locked --group lint format-docstring-jupyter notebooks` |
+
+
+### 1.6 Pre-commit
+
+
+```
+uv run --locked --group lint pre-commit install                # once
+uv run --locked --group lint pre-commit run --all-files
+uv run --locked tox run -e repo-checks                         # hygiene-only (manual stage)
+```
+
+
+### 1.7 Packaging and distribution
+
+| Task | Command |
+|---|---|
+| Build sdist + wheel | `uv run --locked tox run -e build` (→ `dist/`) |
+| Full package check | `uv run --locked tox run -e package-check` |
+| Reinstall + verify | `uv pip install --reinstall dist/<wheel>.whl && uv run python -c "import schafkopfrl; print(schafkopfrl.__version__)"` |
+| Clean `dist/` + `reports/` | `uv run --locked tox run -e clean` |
+
+### 1.8 CI
+
+CI runs the **same Tox environments** as your local `uv run --locked tox`.
+
+Provider: **GitHub Actions** — `.github/workflows/ci.yml` (version matrix), `docs-pages.yml` (publish docs), `renovate.yml` (dependency updates).
+
+
+### 1.9 Documentation & collaboration documents
+
+- `README.md`, `CONTRIBUTING.md`, `MAINTAINING.md`, `LICENSE` (MIT).
+- `.editorconfig`, `.gitignore`, `.python-version`, `py.typed` (PEP 561 — this package is typed), `renovate.json`.
+
+
+
+### 1.10 Bootstrap and later updates
+
+One-time bootstrap (already run on this project):
+
+```
+uv run scripts/init_project.py --git-name "Your Name" --git-email "you@example.com" --tag "v0.0.1"
+```
+
+Order: `git init` (branch `main`) → local identity → initial commit → `uv sync` → `pre-commit run --all-files` (retries while hooks keep fixing files) → second commit only if anything changed → `dvc repro` **only if `dvc.yaml` has stages** → `git tag v0.0.1` → final `uv sync` → verify the worktree is clean.
+
+### 1.11 Updating from the template (later)
+
+Change optional capabilities or pull in upstream fixes **without re-copying** (your own
+files — anything not owned by the template — are preserved):
+
+```
+copier update --defaults --vcs-ref=<commit-or-tag> --data use_uml=false
+```
+
+Gotchas learned the hard way:
+
+- **`--defaults` is required in a non-interactive shell** (CI, an agent, a piped terminal).
+  Without it copier exits: `Warning: Input is not a terminal ... Interactive session required`.
+- **Edited template-owned files become merge conflicts.** If you hand-edited a file the
+  template also renders (e.g. `pyproject.toml`, `docs/source/conf.py`, `README.md`), copier
+  leaves markers instead of guessing:
+  `<<<<<<< before updating` … `=======` … `>>>>>>> after updating`. Resolve each (choose which
+  side — or merge both), then `git add` the file so it is no longer unmerged.
+
+After an update, run the full validation set (see `## 7. Maintenance workflows` → `uv run --locked tox`) — the template and your local tree must agree.
+
+### 1.12 Definition of Done — verification sweep
+
+Every change is complete only when **all** of these are green. Run them in order (fast → slow); fix the first failure before continuing — do not batch failures.
+
+| # | Check | Command |
+|---|---|---|
+| 1 | Lint | `uv run --locked --group lint ruff check .` |
+| 2 | Lint (write) | `uv run --locked --group lint ruff format .` |
+| 3 | Docstrings | `uv run --locked --group lint format-docstring src tests scripts` |
+| 4 | Types | `uv run --locked --group lint mypy src tests scripts` |
+| 5 | Tests + test-coverage gate | `uv run --locked pytest` (gate = `fail_under`, `pyproject.toml`) |
+| 6 | **Docs API coverage** + HTML | `uv run --locked tox run -e docs` (UML + Sphinx `coverage` + html) |
+| 7 | Package | `uv run --locked tox run -e package-check` |
+
+- `uv run --locked tox` = the full matrix; **CI runs the same envs** (`.github/workflows/ci.yml`).
+- Two distinct coverage gates — do not conflate:
+  - *test* coverage: `fail_under` (a threshold, currently `80`).
+  - *docs* API coverage: hard pass/fail — **every public symbol must be documented** (checked by `check_api_coverage` in `scripts/build_docs.py`); there is no percentage to tune.
+- Never lower a gate to go green. Changing a gate is a policy change: update `pyproject.toml` **and** `.copier-answers.yml` `coverage_fail_under` together.
+- **`tox run -e lint` on a dirty tree is expected to fail:** its final step is `git diff --exit-code`, so with uncommitted changes it goes red even when every real check (ruff, mypy, format-docstring) passes. Commit first, or expect that last step to fail while the tree is dirty.
+
+---
+
+
+## 2. Documentation (Sphinx + Furo)
+
+**Files:** `docs/` (source under `docs/source/`), `docs/Makefile` / `docs/make.bat`, `scripts/build_docs.py`.
+
+| Task | Command |
+|---|---|
+| Build HTML | `uv run --locked tox run -e docs -- html` |
+| Build + check code-block coverage | `... tox run -e docs -- coverage` |
+| Clean generated docs | `... tox run -e docs -- clean` |
+| Build everything (UML + gallery + notebooks + html + coverage + clean) | `uv run --locked tox run -e docs` |
+| Via classic Makefile | `cd docs && make` (forwards to `scripts/build_docs.py all`) |
+
+**What to edit:** `docs/source/conf.py` (theme/extensions/metadata), `docs/source/index.md` (landing + toctree), `docs/source/api.rst` (autosummary entries), `docs/source/command-reference.md` (per-feature command table).
+
+**Gotchas:** `sphinx-build` runs **strict** (`-W`) — any warning fails the build.
+
+### 2.a UML diagrams (Pyreverse → Mermaid)
+
+| Task | Command |
+|---|---|
+| Generate package + class diagrams into `docs/source/diagrams/` | `uv run --locked tox run -e uml` |
+| Regenerate + rebuild | `uv run --locked tox run -e docs` (auto-runs UML first) |
+
+
+
+## 3. Jupyter notebooks
+
+**Files:** `notebooks/`, `scripts/check_notebooks.py`, `nbstripout` hook.
+
+| Task | Command |
+|---|---|
+| Validate (format + no stray outputs) | `uv run --locked tox run -e notebooks` |
+| Open a notebook | `uv run jupyter lab notebooks` |
+| Add to docs | copy to `docs/source/notebooks/` (docs build already scans both dirs) |
+
+Rules enforced by the `notebooks` env: docstrings normalised by `format-docstring-jupyter`; no exploratory outputs (re-executed and diffed); `nbstripout` on every commit.
+
+
+
+
+
+## 7. Maintenance workflows
+
+| Task | Command |
+|---|---|
+| Bump version | `git tag v0.1.0` (VCS-derived — no file edit) |
+| Full local matrix | `uv run --locked tox` |
+| Add/update a generated dependency | `uv add --group <name> <pkg>` → `uv lock` → commit |
+| Sync to a newer template | `copier update --vcs-ref=:current:` (preserves user files) → `uv lock && uv run --locked tox` |
+
+## 8. Troubleshooting
+
+| Symptom | Likely cause / fix |
+|---|---|
+| `mypy: Library stubs not installed for "yaml"` | add `types-PyYAML` to the `lint` group (`uv add --group lint types-PyYAML`) → `uv lock` |
+| `uv lock --check` fails | a dependency changed without `uv lock` → `uv lock` and commit |
+| `coverage ... below 80.00%` | add/fix tests; do not lower the gate |
+| `nbstripout ... failed` | outputs committed → `nbstripout -w <file>` and `git add` |
+| `ruff ... I001` | `uv run --locked --group lint ruff format .` |
+| Sphinx nitpicky missing reference | fix the autoclass/autofunction target in `api.rst` |
+| `copier update: No git tags found` | run from a clone with a git ref, or pin `--vcs-ref=<commit>` |
+| `dvc repro: stage failed` | `uv run dvc status`; run the stage command manually |
+| `check-wheel-contents` warnings | tighten wheel includes (`[tool.hatch.build...]` / `[tool.setuptools]`) |

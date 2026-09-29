@@ -1,0 +1,36 @@
+# Changes here will be overwritten by Copier.
+_commit: v0.0.11
+_src_path: /home/nvio/Projects/python-template/python-project-copier-template
+build_backend: hatchling
+changelog_url: ''
+ci_provider: github
+coverage_fail_under: 80
+distribution_name: schafkopfrl
+docstring_style: google
+documentation_url: ''
+has_other_contributors: false
+homepage_url: ''
+license: MIT
+minimum_python_version: '3.11'
+mypy_strict: true
+mypy_strict_tests: false
+package_name: schafkopfrl
+project_description: 'Reinforcement learning for Schafkopf: game engine, gymnasium
+    environment, and training utilities'
+project_kind: data_science
+project_name: Schafkopf RL
+python_versions:
+- '3.11'
+- '3.12'
+- '3.13'
+- '3.14'
+repository_url: ''
+use_docs: true
+use_dvc: false
+use_example_gallery: false
+use_notebooks: true
+use_precommit: true
+use_uml: true
+use_vscode: false
+user_email: Ivo.Nikolic@outlook.com
+user_name: Ivo Nikolic
